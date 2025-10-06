@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: mottu-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - mottu-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  rabbitmq-setup:
+    image: rabbitmq:3.12-management
+    container_name: mottu-rabbitmq-setup
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    command: >
+      bash -c "
+        sleep 10 &&
+        rabbitmqctl add_user mottu_user mottu_pass &&
+        rabbitmqctl set_user_tags mottu_user administrator &&
+        rabbitmqctl set_permissions -p / mottu_user '.*' '.*' '.*' &&
+        rabbitmqctl add_vhost mottu_vhost &&
+        rabbitmqctl set_permissions -p mottu_vhost mottu_user '.*' '.*' '.*' &&
+        echo 'RabbitMQ setup completed'
+      "
+    networks:
+      - mottu-network
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  mottu-network:
+    driver: bridge
